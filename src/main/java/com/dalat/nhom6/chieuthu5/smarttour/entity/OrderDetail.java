@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "order_details")
@@ -30,6 +31,18 @@ public class OrderDetail {
     @Column(name = "actual_price", nullable = false)
     private BigDecimal actualPrice;
 
+    @Column(name = "booking_days")
+    private Integer bookingDays;
+
+    @Column(name = "return_room_at")
+    private java.time.LocalDateTime returnRoomAt;
+
+    @Column(name = "is_room_returned")
+    private Boolean isRoomReturned;
+
     @Column(name = "apply_date")
     private LocalDate applyDate;
+
+    @Column(name = "booking_time")
+    private LocalTime bookingTime;
 }

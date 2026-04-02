@@ -40,6 +40,8 @@ async function loadDashboard() {
         const d = await res.json();
         setText('stat-users',      d.totalUsers);
         setText('stat-agencies',   d.totalAgencies);
+        setText('stat-orders',     d.totalOrders + ' (đã PAID: ' + (d.totalPaidOrders || 0) + ')');
+        setText('stat-revenue',    fmtVND(d.revenue));
         setText('stat-commission', fmtVND(d.commission));
     } catch {}
 
@@ -129,13 +131,14 @@ function showServiceDetail(id) {
     if (!s) return;
 
     const tourMeta = s.type === 'TOUR' ? `
-        <div style="background:rgba(255,255,255,.05);padding:.75rem;border-radius:8px;margin-bottom:1rem">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:.75rem;border-radius:8px;margin-bottom:1rem">
             <div><span style="color:var(--text-muted)">Giới hạn số người:</span> <b>${s.maxPeople || 'Vô hạn'}</b></div>
             <div><span style="color:var(--text-muted)">Số ngày:</span> <b>${s.durationDays || '?'}</b></div>
             <div><span style="color:var(--text-muted)">Phương tiện:</span> <b>${s.transportation || 'Tự túc'}</b></div>
         </div>
-    ` : (s.openingTime || s.closingTime ? `
-        <div style="background:rgba(255,255,255,.05);padding:.75rem;border-radius:8px;margin-bottom:1rem">
+    ` : (s.type === 'HOTEL' || s.openingTime || s.closingTime ? `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:.75rem;border-radius:8px;margin-bottom:1rem">
+            ${s.type === 'HOTEL' ? `<div><span style="color:var(--text-muted)"><i class="fas fa-bed"></i> Phòng trống cơ sở:</span> <b style="color:#34d399">${s.availableRooms || 0} phòng</b></div>` : ''}
             <div><span style="color:var(--text-muted)"><i class="fas fa-door-open"></i> Giờ Mở Cửa:</span> <b>${s.openingTime || 'Chưa cập nhật'}</b></div>
             <div><span style="color:var(--text-muted)"><i class="fas fa-door-closed"></i> Giờ Đóng Cửa:</span> <b>${s.closingTime || 'Chưa cập nhật'}</b></div>
         </div>
@@ -148,11 +151,12 @@ function showServiceDetail(id) {
             <div><span style="color:var(--text-muted)">Loại dịch vụ:</span> <b>${s.type}</b></div>
             <div><span style="color:var(--text-muted)">Đại lý:</span> <b>${s.agencyName || (s.agency?s.agency.agencyName:'')}</b></div>
             <div><span style="color:var(--text-muted)">Giá niêm yết:</span> <b style="color:#34d399">${fmtVND(s.salePrice || s.price || 0)}</b></div>
+            <div><span style="color:var(--text-muted)">Mô tả:</span> <span style="display:block;margin-top:4px;color:var(--text-main)">${s.description || 'Chưa có mô tả'}</span></div>
             <div><span style="color:var(--text-muted)">Trạng thái:</span> ${s.isApproved ? '<b style="color:#34d399">Đã Phê Duyệt</b>' : '<b style="color:#fbbf24">Chờ Duyệt</b>'}</div>
         </div>
         ${tourMeta}
-        <h4 style="margin-top:1.5rem;margin-bottom:.5rem"><i class="fas fa-map text-accent"></i> Hành trình / Toạ độ</h4>
-        <div id="admin-map-container" style="width:100%;height:250px;border-radius:12px;background:#1e293b;overflow:hidden"></div>
+        <h4 style="margin-top:1.5rem;margin-bottom:.5rem"><i class="fas fa-map text-primary"></i> Hành trình / Toạ độ</h4>
+        <div id="admin-map-container" style="width:100%;height:250px;border-radius:12px;background:#f1f5f9;border:1px solid #e2e8f0;overflow:hidden"></div>
     `;
     document.getElementById('detail-modal').style.display = 'flex';
 
@@ -414,12 +418,96 @@ async function saveConfig(e) {
     else showToast('Lỗi khi lưu API Key!', true);
 }
 
-// ── 10. KHỞI ĐỘNG ─────────────────────────────────────────
+// ── 9. CHUÔNG THÔNG BÁO ────────────────────────────────────
+function loadUnreadNotifications() {
+    fetch('/api/notifications/unread')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(data => {
+        const badge = document.getElementById('unreadCount');
+        const list  = document.getElementById('notifList');
+        if (!badge || !list) return;
+
+        badge.style.display = data.unreadCount > 0 ? 'inline-block' : 'none';
+        if (data.unreadCount > 0) badge.innerText = data.unreadCount;
+
+        if (data.notifications && data.notifications.length > 0) {
+            list.innerHTML = data.notifications.map(n => {
+                const icon = n.type === 'NEW_SERVICE'    ? 'fa-box-open' :
+                             n.type === 'UPDATE_SERVICE' ? 'fa-edit' :
+                             n.type === 'NEW_AGENCY'     ? 'fa-building' :
+                             n.type === 'NEW_BOOKING'    ? 'fa-shopping-cart' : 'fa-bell';
+                const t = n.createdAt ? new Date(n.createdAt).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '';
+                return `<div onclick="handleNotifClick(${n.id},'${n.linkTarget || 'services'}')"
+                    style="cursor:pointer;padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#1e293b;display:flex;gap:10px;align-items:flex-start"
+                    onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
+                  <i class="fas ${icon}" style="color:#818cf8;margin-top:3px;flex-shrink:0"></i>
+                  <div><div style="font-size:.82rem">${n.message}</div>
+                  <div style="font-size:.72rem;color:#64748b;margin-top:3px">${t}</div></div>
+                </div>`;
+            }).join('');
+        } else {
+            list.innerHTML = '<div style="padding:12px;color:#64748b;text-align:center"><i class="fas fa-check-double"></i> Không có thông báo mới</div>';
+        }
+      }).catch(() => {});
+}
+
+async function handleNotifClick(id, target) {
+    await fetch(`/api/notifications/mark-read/${id}`, {method:'POST'});
+    const navLink = document.querySelector(`.nav-link[data-target="${target}"]`);
+    if (navLink) navLink.click();
+    document.getElementById('notifList').style.display = 'none';
+    loadUnreadNotifications();
+}
+
+document.getElementById('btnNotifications').addEventListener('click', () => {
+    loadUnreadNotifications();
+});
+
+// ── 10. KHỞI ĐỘNG ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    connectWebSocket(); // Bật socket lắng nghe Staff
+    connectWebSocket();
     loadDashboard();
     fetchAgencies();
     fetchServices();
     fetchConfigs();
     if(document.getElementById('usersList')) fetchUsers();
+    loadUnreadNotifications();
+    loadAdminChart(); // Tự động load biểu đồ khi mở trang
+    setInterval(loadUnreadNotifications, 30000); // tự refresh badge mỗi 30 giây
 });
+
+let adminChartInstance = null;
+
+async function loadAdminChart() {
+    try {
+        const res = await fetch('/api/admin/chart-data');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const ctx = document.getElementById('adminRevenueChart');
+        if (!ctx) return;
+
+        // Xóa biểu đồ cũ nếu đã vẽ để tránh bị đè lỗi
+        if (adminChartInstance) adminChartInstance.destroy();
+
+        adminChartInstance = new Chart(ctx, {
+            type: 'line', // Biểu đồ đường
+            data: {
+                labels: ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'],
+                datasets: [{
+                    label: 'Tổng Doanh Thu (VNĐ)',
+                    data: data.monthlyRevenue,
+                    borderColor: '#4f46e5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.3, // Làm cong đường nối
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    } catch (e) { console.error("Lỗi vẽ biểu đồ Admin:", e); }
+}

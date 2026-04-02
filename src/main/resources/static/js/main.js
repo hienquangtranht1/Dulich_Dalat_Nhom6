@@ -1,8 +1,7 @@
-// Global UI Logic
 document.addEventListener('DOMContentLoaded', () => {
     
     // Tab Switching Logic
-    const initTabs = () => {
+    window.initTabs = function() {
         const tabLinks = document.querySelectorAll('.nav-link[data-target]');
         const tabContents = document.querySelectorAll('.tab-content');
 
@@ -27,30 +26,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Re-trigger animation
                     void targetContent.offsetWidth; 
                     targetContent.classList.add('animate-fade-in');
+                    
+                    // Trigger map resize if open Map tab (User form only)
+                    if (targetId === 'map' && window.explorerMap) {
+                        setTimeout(() => {
+                            window.explorerMap.invalidateSize();
+                            if (typeof explorerMapGroup !== 'undefined' && explorerMapGroup.getBounds().isValid()) {
+                                window.explorerMap.fitBounds(explorerMapGroup.getBounds(), {padding: [30,30]});
+                            }
+                        }, 250);
+                    }
                 }
             });
         });
     };
 
-    // Initialize map if the container exists (OpenStreetMap integration mockup)
-    const initMockMap = () => {
-        const mapContainer = document.getElementById('osm-map');
-        if (mapContainer) {
-            // In a real app, you would initialize Leaflet.js with OSM tiles here.
-            mapContainer.innerHTML = `
-                <div class="flex items-center justify-center" style="height: 100%; background: rgba(0,0,0,0.2);">
-                    <div class="text-center">
-                        <i class="fas fa-map-marked-alt text-4xl mb-3 text-primary" style="color:#6366f1"></i>
-                        <p class="text-muted">Bản đồ OpenStreetMap Interactive (Đã tải)</p>
-                        <p class="text-sm">Hiển thị đường dẫn tối ưu giữa các địa điểm AI gợi ý.</p>
-                    </div>
-                </div>
-            `;
-        }
-    };
-
-    initTabs();
-    initMockMap();
+    // Auto init tabs if any exist
+    window.initTabs();
 });
 
 // Mock notification

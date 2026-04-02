@@ -58,6 +58,9 @@ public class Service {
     @Column(name = "duration_days")
     private Integer durationDays;
 
+    @Column(name = "available_trips")
+    private Integer availableTrips; // Số chuyến đi tối đa phục vụ cùng lúc
+
     @Column(name = "transportation")
     private String transportation;
 
@@ -77,6 +80,9 @@ public class Service {
 
     @Column(name = "room_type", length = 100)
     private String roomType;
+
+    @Column(name = "available_rooms")
+    private Integer availableRooms;
 
     private Integer capacity;
 

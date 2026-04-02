@@ -5,13 +5,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
-@Repository
 public interface OrderDetailRepository extends JpaRepository<OrderDetail, Integer> {
     List<OrderDetail> findByServiceId(Integer serviceId);
+
+    // Lấy các phòng khách sạn đã quá giờ trả phòng nhưng mảng "isRoomReturned" chưa được mark true
+    @Query("SELECT od FROM OrderDetail od JOIN od.order o WHERE od.returnRoomAt < :now AND (od.isRoomReturned = false OR od.isRoomReturned IS NULL) AND o.status IN ('AWAITING_PAYMENT', 'PAID')")
+    List<OrderDetail> findExpiredHotelBookings(@Param("now") LocalDateTime now);
 
     // Cần @Modifying + @Transactional + @Query để Spring Data JPA thực sự
     // thực thi câu lệnh DELETE. Nếu thiếu, query sẽ bị bỏ qua hoàn toàn!

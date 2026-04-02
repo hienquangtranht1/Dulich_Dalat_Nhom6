@@ -11,6 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -26,6 +30,12 @@ public class UserController {
     private UserRepository userRepository;
 
     @Autowired
+    private com.dalat.nhom6.chieuthu5.smarttour.repository.NotificationRepository notificationRepository;
+
+    @Autowired
+    private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
+    @Autowired
     private OrderRepository orderRepository;
 
     private User getUserFromSession(HttpServletRequest request) {
@@ -37,7 +47,13 @@ public class UserController {
         return null;
     }
 
-    // Lấy danh sách Dịch Vụ đã được Admin duyệt
+    @GetMapping("/me")
+    public ResponseEntity<?> getMe(HttpServletRequest request) {
+        User u = getUserFromSession(request);
+        if (u == null) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(Map.of("username", u.getUsername(), "email", u.getEmail()));
+    }
+
     @GetMapping("/services")
     @Transactional(readOnly = true)
     public ResponseEntity<?> getApprovedServices() {
@@ -61,6 +77,9 @@ public class UserController {
             } else {
                 map.put("openingTime", s.getOpeningTime());
                 map.put("closingTime", s.getClosingTime());
+                if ("HOTEL".equals(s.getServiceType())) {
+                    map.put("availableRooms", s.getAvailableRooms() != null ? s.getAvailableRooms() : 0);
+                }
             }
             map.put("mapPoints", s.getMapPoints());
             return map;
@@ -69,10 +88,17 @@ public class UserController {
         return ResponseEntity.ok(result);
     }
 
-    // Đặt vòng lặp Order 1 Dịch vụ
     @PostMapping("/book/{serviceId}")
     @Transactional
-    public ResponseEntity<?> bookSingleService(@PathVariable("serviceId") Integer serviceId, HttpServletRequest request) {
+    public ResponseEntity<?> bookSingleService(
+            @PathVariable("serviceId") Integer serviceId,
+            @RequestParam(value = "quantity", defaultValue = "1") Integer quantity, // Đây là số Phòng (Hotel), Bàn (Ăn uống) hoặc Vé (Tour)
+            @RequestParam(value = "numberOfPeople", required = false) Integer numberOfPeople, // THÊM MỚI: Số người đi
+            @RequestParam(value = "bookingDays", defaultValue = "1") Integer bookingDays,
+            @RequestParam(value = "bookingDate", required = false) String bookingDateStr,
+            @RequestParam(value = "bookingTime", required = false) String bookingTimeStr,
+            HttpServletRequest request) {
+            
         User user = getUserFromSession(request);
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Vui lòng đăng nhập trước!"));
@@ -83,27 +109,119 @@ public class UserController {
             return ResponseEntity.badRequest().body(Map.of("error", "Dịch vụ không tồn tại"));
         }
 
+        LocalDate bookingDate = null;
+        if (bookingDateStr != null && !bookingDateStr.isBlank()) {
+            try {
+                bookingDate = LocalDate.parse(bookingDateStr);
+                if (bookingDate.isBefore(LocalDate.now())) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Ngày đặt không được ở quá khứ!"));
+                }
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Ngày không hợp lệ (YYYY-MM-DD)"));
+            }
+        } else {
+            return ResponseEntity.badRequest().body(Map.of("error", "Vui lòng chọn ngày đặt dịch vụ!"));
+        }
+
+        LocalTime bookingTime = null;
+        if (!"TOUR".equals(svc.getServiceType())) {
+            if (bookingTimeStr != null && !bookingTimeStr.isBlank()) {
+                try {
+                    bookingTime = LocalTime.parse(bookingTimeStr);
+                    if (svc.getOpeningTime() != null && svc.getClosingTime() != null) {
+                        LocalTime open = LocalTime.parse(svc.getOpeningTime());
+                        LocalTime close = LocalTime.parse(svc.getClosingTime());
+                        if (bookingTime.isBefore(open) || bookingTime.isAfter(close)) {
+                            return ResponseEntity.badRequest().body(Map.of("error",
+                                "Giờ đặt phải trong khung giờ: " + svc.getOpeningTime() + " - " + svc.getClosingTime()));
+                        }
+                    }
+                } catch (Exception e) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Giờ không hợp lệ (HH:mm)"));
+                }
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("error", "Vui lòng chọn giờ đến dịch vụ!"));
+            }
+        }
+
+        // --- 1. KIỂM TRA GIỚI HẠN SỨC CHỨA VÀ TÌNH TRẠNG KHO ---
+        int maxP = svc.getMaxPeople() != null ? svc.getMaxPeople() : 1;
+
+        if ("TOUR".equals(svc.getServiceType())) {
+            if (quantity > maxP) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Số khách vượt quá quy định (Tối đa " + maxP + " người)"));
+            }
+            int availableTrips = svc.getAvailableTrips() != null ? svc.getAvailableTrips() : 0;
+            if (availableTrips <= 0) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Rất tiếc! Đã hết số chuyến đi của dịch vụ này!"));
+            }
+            svc.setAvailableTrips(availableTrips - 1);
+            serviceRepository.save(svc);
+        } else {
+            // KHÁCH SẠN HOẶC ĂN UỐNG
+            // Kiểm tra số người nhập vào (Nếu UI có truyền) có vượt sức chứa không?
+            if (numberOfPeople != null) {
+                int maxCapacity = maxP * quantity; // Sức chứa tối đa = số phòng * sức chứa 1 phòng
+                if (numberOfPeople > maxCapacity) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Vượt quá sức chứa! Giới hạn chỉ được " + maxP + " người / 1 Đơn vị đặt."));
+                }
+            }
+
+            if ("HOTEL".equals(svc.getServiceType())) {
+                int available = svc.getAvailableRooms() != null ? svc.getAvailableRooms() : 0;
+                if (quantity > available) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Không đủ số lượng phòng trống. Hiện còn: " + available));
+                }
+                svc.setAvailableRooms(available - quantity);
+                serviceRepository.save(svc);
+            }
+        }
+
+        // --- 2. TÍNH TIỀN CHUẨN (KHÔNG NHÂN THEO ĐẦU NGƯỜI CHO KHÁCH SẠN/ĂN UỐNG) ---
+        BigDecimal unitPrice = svc.getSalePrice();
+        // Cơ bản: Giá = Đơn Giá * Số lượng (Phòng, Bàn, hoặc Vé)
+        BigDecimal amount = unitPrice.multiply(BigDecimal.valueOf(quantity)); 
+        
+        if ("HOTEL".equals(svc.getServiceType())) {
+            // Khách sạn tính thêm theo số đêm (bookingDays)
+            amount = amount.multiply(BigDecimal.valueOf(bookingDays)); 
+        }
+        // => LƯU Ý: Ở trên `amount` TUYỆT ĐỐI KHÔNG bị nhân với `numberOfPeople`. Số tiền sẽ đóng băng theo phòng/đêm!
+
         Order order = Order.builder()
                 .user(user)
-                .totalAmount(svc.getSalePrice())
+                .totalAmount(amount)
                 .status("PENDING")
+                .orderDate(LocalDateTime.now())
                 .build();
         
         OrderDetail detail = OrderDetail.builder()
                 .order(order)
                 .service(svc)
-                .quantity(1)
-                .actualPrice(svc.getSalePrice())
+                .quantity(quantity) 
+                .bookingDays(bookingDays) 
+                .actualPrice(unitPrice)
+                .isRoomReturned(false)
+                .applyDate(bookingDate)
+                .bookingTime(bookingTime)
                 .build();
                 
         order.setOrderDetails(List.of(detail));
-        
         orderRepository.save(order);
+
+        User staffUser = svc.getAgency().getUser();
+        Notification n = Notification.builder()
+                .user(staffUser)
+                .message("Có khách hàng (" + user.getUsername() + ") vừa đặt: " + svc.getServiceName())
+                .type("ORDER_PENDING")
+                .isRead(false)
+                .build();
+        notificationRepository.save(n);
+        messagingTemplate.convertAndSend("/topic/staff/notifications", "Đơn đặt mới: " + svc.getServiceName() + " (" + user.getUsername() + ")");
 
         return ResponseEntity.ok(Map.of("status", "success", "message", "Đã đặt thành công chờ Đại lý duyệt!"));
     }
 
-    // Lấy danh sách các Đơn đặt của user hiện tại (Để chia tiền/thanh toán hóa đơn)
     @GetMapping("/orders")
     @Transactional(readOnly = true)
     public ResponseEntity<?> getMyOrders(HttpServletRequest request) {
@@ -112,28 +230,70 @@ public class UserController {
             return ResponseEntity.status(401).body(Map.of("error", "Vui lòng đăng nhập trước!"));
         }
 
-        List<Order> orders = orderRepository.findByUserId(user.getId());
+        List<Order> orders = orderRepository.findByUserIdWithDetails(user.getId());
         
         List<Map<String, Object>> result = orders.stream().map(o -> {
-            String serviceNames = o.getOrderDetails().stream()
-                    .map(d -> d.getService().getServiceName() + " (x" + d.getQuantity() + ")")
-                    .collect(Collectors.joining(", "));
-            
-            return Map.<String, Object>of(
-                "id", o.getId(),
-                "services", serviceNames,
-                "totalAmount", o.getTotalAmount(),
-                "status", o.getStatus(),
-                "orderDate", o.getOrderDate() != null ? o.getOrderDate().toString() : ""
-            );
+            Map<String, Object> row = new java.util.HashMap<>();
+            row.put("id", o.getId());
+            row.put("totalAmount", o.getTotalAmount());
+            row.put("status", o.getStatus());
+            row.put("orderDate", o.getOrderDate() != null ? o.getOrderDate().toString() : "");
+
+            String serviceNames = "Đang cập nhật...";
+            String bookingDateDisplay = "";
+            String bookingTimeDisplay = "";
+            String endDateDisplay = "";
+            int bookingDays = 1;
+            String serviceType = "";
+            int quantity = 1;
+
+            if (o.getOrderDetails() != null && !o.getOrderDetails().isEmpty()) {
+                List<OrderDetail> validDetails = o.getOrderDetails().stream()
+                        .filter(d -> d != null && d.getService() != null)
+                        .collect(Collectors.toList());
+
+                serviceNames = validDetails.stream()
+                        .map(d -> d.getService().getServiceName() + " (x" + d.getQuantity() + ")")
+                        .collect(Collectors.joining(", "));
+
+                if (!validDetails.isEmpty()) {
+                    OrderDetail d0 = validDetails.get(0);
+                    if (d0.getApplyDate() != null) bookingDateDisplay = d0.getApplyDate().toString();
+                    if (d0.getBookingTime() != null) bookingTimeDisplay = d0.getBookingTime().toString();
+                    
+                    // SỬA LẠI ĐOẠN NÀY ĐỂ TÍNH NGÀY KẾT THÚC CHO CẢ TOUR VÀ KHÁCH SẠN
+                    if (d0.getApplyDate() != null) {
+                        if ("TOUR".equals(d0.getService().getServiceType()) && d0.getService().getDurationDays() != null) {
+                            endDateDisplay = d0.getApplyDate().plusDays(d0.getService().getDurationDays()).toString();
+                        } else if ("HOTEL".equals(d0.getService().getServiceType()) && d0.getBookingDays() != null) {
+                            // Khách sạn: Ngày kết thúc = Ngày applyDate (đến) + Số đêm (bookingDays)
+                            endDateDisplay = d0.getApplyDate().plusDays(d0.getBookingDays()).toString();
+                        }
+                    }
+                    bookingDays = d0.getBookingDays() != null ? d0.getBookingDays() : 1;
+                    serviceType = d0.getService().getServiceType();
+                    quantity = d0.getQuantity() != null ? d0.getQuantity() : 1;
+                }
+            }
+
+            row.put("services", serviceNames);
+            row.put("bookingDate", bookingDateDisplay);
+            row.put("bookingTime", bookingTimeDisplay);
+            row.put("endDate", endDateDisplay);
+            row.put("bookingDays", bookingDays);
+            row.put("serviceType", serviceType);
+            row.put("quantity", quantity);
+            return row;
         }).collect(Collectors.toList());
 
         return ResponseEntity.ok(result);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<String> handleAllExceptions(Exception ex) {
+    public ResponseEntity<?> handleAllExceptions(Exception ex) {
         ex.printStackTrace();
-        return ResponseEntity.status(500).body("Chi tiết lỗi từ Spring Boot: " + ex.getClass().getSimpleName() + " - " + ex.getMessage());
+        return ResponseEntity.status(500).body(Map.of(
+            "error", "Lỗi Server: " + ex.getClass().getSimpleName() + " - " + ex.getMessage()
+        ));
     }
 }

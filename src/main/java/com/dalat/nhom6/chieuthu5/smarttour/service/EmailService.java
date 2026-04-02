@@ -31,6 +31,20 @@ public class EmailService {
         }
     }
 
+    public void sendEmail(String toEmail, String subject, String body) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail, "Smart Tour Đà Lạt");
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(body, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            System.err.println("Gửi email thất bại: " + e.getMessage());
+        }
+    }
+
     private String buildOtpEmailHtml(String otp) {
         return """
             <!DOCTYPE html>

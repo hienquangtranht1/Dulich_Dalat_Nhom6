@@ -40,6 +40,9 @@ public class AdminController {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private CommissionRepository commissionRepository;
+
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session == null) return false;
@@ -54,19 +57,22 @@ public class AdminController {
         long totalAgencies = agencyRepository.count();
         long totalOrders = orderRepository.count();
         
-        // Thống kê Doanh thu tất cả dịch vụ (cho Admin)
-        BigDecimal revenue = orderRepository.findAll().stream()
+        // Chỉ tính doanh thu các đơn đã PAID thực tế
+        List<Order> paidOrders = orderRepository.findByStatus("PAID");
+        long totalPaidOrders = paidOrders.size();
+        BigDecimal revenue = paidOrders.stream()
                 .map(Order::getTotalAmount)
                 .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Chiết khấu hoa hồng siêu tính nhẩm (10%)
-        BigDecimal commission = revenue.multiply(new BigDecimal("0.10"));
+        // Hoa hồng thực tế từ DB (5% của PAID)
+        BigDecimal commission = commissionRepository.sumTotalCommission();
 
         return ResponseEntity.ok(Map.of(
             "totalUsers", totalUsers,
             "totalAgencies", totalAgencies,
             "totalOrders", totalOrders,
+            "totalPaidOrders", totalPaidOrders,
             "revenue", revenue,
             "commission", commission
         ));
@@ -125,6 +131,7 @@ public class AdminController {
             map.put("isApproved", s.getIsApproved() != null ? s.getIsApproved() : false);
             map.put("imageUrl", s.getImageUrl() != null ? s.getImageUrl() : "https://via.placeholder.com/150");
             
+            map.put("description", s.getDescription());
             if ("TOUR".equals(s.getServiceType())) {
                 map.put("maxPeople", s.getMaxPeople());
                 map.put("durationDays", s.getDurationDays());
@@ -132,6 +139,9 @@ public class AdminController {
             } else {
                 map.put("openingTime", s.getOpeningTime());
                 map.put("closingTime", s.getClosingTime());
+                if ("HOTEL".equals(s.getServiceType())) {
+                    map.put("availableRooms", s.getAvailableRooms());
+                }
             }
             map.put("mapPoints", s.getMapPoints());
             return map;
@@ -313,5 +323,26 @@ public class AdminController {
             e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of("error", "Lỗi DB: Không thể xoá User do dính khóa ngoại"));
         }
+    }
+
+    @GetMapping("/chart-data")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getAdminChartData() {
+        List<Order> allOrders = orderRepository.findAll();
+        BigDecimal[] monthlyRevenue = new BigDecimal[12];
+        java.util.Arrays.fill(monthlyRevenue, BigDecimal.ZERO);
+
+        int currentYear = java.time.LocalDate.now().getYear();
+
+        for (Order o : allOrders) {
+            // Chỉ tính các đơn đã thanh toán thành công
+            if ("PAID".equals(o.getStatus()) || "IN_PROGRESS".equals(o.getStatus()) || "COMPLETED".equals(o.getStatus())) {
+                if (o.getOrderDate() != null && o.getOrderDate().getYear() == currentYear) {
+                    int monthIndex = o.getOrderDate().getMonthValue() - 1; // Index từ 0 - 11
+                    monthlyRevenue[monthIndex] = monthlyRevenue[monthIndex].add(o.getTotalAmount());
+                }
+            }
+        }
+        return ResponseEntity.ok(Map.of("monthlyRevenue", monthlyRevenue));
     }
 }

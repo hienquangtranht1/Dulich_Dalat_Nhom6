@@ -25,6 +25,7 @@ public class AuthController {
     @Autowired private AgencyRepository agencyRepository;
     @Autowired private OtpService otpService;
     @Autowired private EmailService emailService;
+    @Autowired private com.dalat.nhom6.chieuthu5.smarttour.repository.NotificationRepository notificationRepository;
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
@@ -32,8 +33,8 @@ public class AuthController {
 
     // ── 1. ĐĂNG NHẬP ─────────────────────────────────────────
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestParam String username,
-                                   @RequestParam String password,
+    public ResponseEntity<?> login(@RequestParam("username") String username,
+                                   @RequestParam("password") String password,
                                    HttpServletRequest request) {
         Optional<User> userOpt = userRepository.findByUsername(username.trim());
         if (userOpt.isEmpty()) {
@@ -41,10 +42,19 @@ public class AuthController {
         }
         User user = userOpt.get();
 
-        // So sánh BCrypt
-        boolean passOk = passwordEncoder.matches(password, user.getPassword());
-        // Nếu pass không match BCrypt, thử match plain text (tài khoản cũ)
-        if (!passOk && user.getPassword().equals(password)) passOk = true;
+        String dbPass = user.getPassword();
+        boolean passOk = false;
+
+        // So sánh BCrypt, an toàn với null
+        if (dbPass != null) {
+            try {
+                passOk = passwordEncoder.matches(password, dbPass);
+            } catch (Exception ignored) {}
+            
+            if (!passOk && dbPass.equals(password)) {
+                passOk = true;
+            }
+        }
 
         if (!passOk) {
             return ResponseEntity.status(401).body(Map.of("status","error","message","Sai tài khoản hoặc mật khẩu!"));
@@ -54,8 +64,14 @@ public class AuthController {
             return ResponseEntity.status(403).body(Map.of("status","error","message","Tài khoản đã bị khóa!"));
         }
 
+        Role userRoleEnum = user.getRole();
+        if (userRoleEnum == null) {
+            userRoleEnum = Role.USER;
+        }
+        String roleStr = userRoleEnum.name();
+
         // Nếu STAFF, kiểm tra đại lý đã được duyệt chưa
-        if (user.getRole() == Role.STAFF) {
+        if (userRoleEnum == Role.STAFF) {
             Optional<Agency> agencyOpt = agencyRepository.findByUserId(user.getId());
             if (agencyOpt.isEmpty() || !Boolean.TRUE.equals(agencyOpt.get().getIsApproved())) {
                 return ResponseEntity.status(403).body(Map.of("status","error","message","Tài khoản Đại lý của bạn đang chờ Admin phê duyệt!"));
@@ -64,18 +80,18 @@ public class AuthController {
 
         HttpSession session = request.getSession(true);
         session.setAttribute("USER_ID", user.getId());
-        session.setAttribute("USER_ROLE", user.getRole().name());
+        session.setAttribute("USER_ROLE", roleStr);
 
         return ResponseEntity.ok(Map.of(
             "status", "success",
-            "role", user.getRole().name(),
-            "redirect", "/" + user.getRole().name().toLowerCase() + ".html"
+            "role", roleStr,
+            "redirect", "/" + roleStr.toLowerCase() + ".html"
         ));
     }
 
     // ── 2. GỬI OTP VỀ GMAIL ─────────────────────────────────
     @PostMapping("/send-otp")
-    public ResponseEntity<?> sendOtp(@RequestParam String email) {
+    public ResponseEntity<?> sendOtp(@RequestParam("email") String email) {
         email = email.trim().toLowerCase();
         if (userRepository.existsByEmail(email)) {
             return ResponseEntity.badRequest().body(Map.of("status","error","message","Email này đã được đăng ký!"));
@@ -91,7 +107,7 @@ public class AuthController {
 
     // ── 3. XÁC THỰC OTP ─────────────────────────────────────
     @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(@RequestParam String email, @RequestParam String otp) {
+    public ResponseEntity<?> verifyOtp(@RequestParam("email") String email, @RequestParam("otp") String otp) {
         boolean valid = otpService.verify(email.trim().toLowerCase(), otp.trim());
         if (valid) return ResponseEntity.ok(Map.of("status","ok","message","OTP hợp lệ!"));
         return ResponseEntity.badRequest().body(Map.of("status","error","message","Mã OTP không đúng hoặc đã hết hạn!"));
@@ -100,20 +116,20 @@ public class AuthController {
     // ── 4. ĐĂNG KÝ ──────────────────────────────────────────
     @PostMapping("/register")
     public ResponseEntity<?> register(
-            @RequestParam String username,
-            @RequestParam String password,
-            @RequestParam String email,
-            @RequestParam(required = false) String fullName,
-            @RequestParam(required = false) String phone,
-            @RequestParam String otp,
-            @RequestParam(defaultValue = "USER") String role,
+            @RequestParam("username") String username,
+            @RequestParam("password") String password,
+            @RequestParam("email") String email,
+            @RequestParam(value = "fullName", required = false) String fullName,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestParam("otp") String otp,
+            @RequestParam(value = "role", defaultValue = "USER") String role,
             // Trường dành riêng cho Staff/Đại lý
-            @RequestParam(required = false) String agencyName,
-            @RequestParam(required = false) String businessLicense,
-            @RequestParam(required = false) String taxCode,
-            @RequestParam(required = false) String address,
-            @RequestParam(required = false) String contactPhone,
-            @RequestParam(required = false) String website) {
+            @RequestParam(value = "agencyName", required = false) String agencyName,
+            @RequestParam(value = "businessLicense", required = false) String businessLicense,
+            @RequestParam(value = "taxCode", required = false) String taxCode,
+            @RequestParam(value = "address", required = false) String address,
+            @RequestParam(value = "contactPhone", required = false) String contactPhone,
+            @RequestParam(value = "website", required = false) String website) {
 
         // Kiểm tra OTP
         if (!otpService.verify(email.trim().toLowerCase(), otp.trim())) {
@@ -216,16 +232,16 @@ public class AuthController {
 
     @PutMapping("/profile")
     public ResponseEntity<?> updateProfile(
-            @RequestParam(required = false) String fullName,
-            @RequestParam(required = false) String phone,
-            @RequestParam(required = false) String avatarUrl,
-            @RequestParam(required = false) String agencyName,
-            @RequestParam(required = false) String taxCode,
-            @RequestParam(required = false) String address,
-            @RequestParam(required = false) String contactPhone,
-            @RequestParam(required = false) String website,
-            @RequestParam(required = false) String description,
-            @RequestParam(required = false) String logoUrl,
+            @RequestParam(value = "fullName", required = false) String fullName,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestParam(value = "avatarUrl", required = false) String avatarUrl,
+            @RequestParam(value = "agencyName", required = false) String agencyName,
+            @RequestParam(value = "taxCode", required = false) String taxCode,
+            @RequestParam(value = "address", required = false) String address,
+            @RequestParam(value = "contactPhone", required = false) String contactPhone,
+            @RequestParam(value = "website", required = false) String website,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "logoUrl", required = false) String logoUrl,
             HttpServletRequest request) {
 
         Integer userId = getUserIdFromSession(request);
@@ -259,8 +275,8 @@ public class AuthController {
     // ── 6. ĐỔI MẬT KHẨU ────────────────────────────────────
     @PostMapping("/change-password")
     public ResponseEntity<?> changePassword(
-            @RequestParam String oldPassword,
-            @RequestParam String newPassword,
+            @RequestParam("oldPassword") String oldPassword,
+            @RequestParam("newPassword") String newPassword,
             HttpServletRequest request) {
 
         Integer userId = getUserIdFromSession(request);
@@ -295,6 +311,15 @@ public class AuthController {
         if (attr instanceof Integer i) return i;
         if (attr instanceof String s) { try { return Integer.parseInt(s); } catch (Exception ignored) {} }
         return null;
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<?> handleException(Exception e) {
+        e.printStackTrace();
+        return ResponseEntity.status(500).body(Map.of(
+            "status", "error",
+            "message", "Lỗi Server: " + e.getClass().getSimpleName() + " - " + e.getMessage()
+        ));
     }
 }
 
