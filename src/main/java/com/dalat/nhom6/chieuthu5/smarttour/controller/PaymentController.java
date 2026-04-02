@@ -70,9 +70,10 @@ public class PaymentController {
             vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
             vnp_Params.put("vnp_IpAddr", vnp_IpAddr);
 
-            // Thời gian tạo & hết hạn giao dịch (GMT+7)
-            Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
+            // Thời gian tạo & hết hạn giao dịch (GMT+7 - Bắt buộc đúng timezone)
+            Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
             SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
+            formatter.setTimeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
             vnp_Params.put("vnp_CreateDate", formatter.format(cld.getTime()));
             cld.add(Calendar.MINUTE, 15);
             vnp_Params.put("vnp_ExpireDate", formatter.format(cld.getTime()));
@@ -275,31 +276,22 @@ public class PaymentController {
             }
         }
 
-        // Trả HTML trực tiếp để điều hướng về React Frontend
-        String targetUrl = success ? "http://localhost:5173/payment/success" : "http://localhost:5173/payment/failure";
-        
-        // Đính kèm các tham số cần thiết từ VNPAY để trang thông báo hiển thị chi tiết
-        if (success) {
-            targetUrl += "?vnp_TxnRef=" + request.getParameter("vnp_TxnRef") + 
-                         "&vnp_Amount=" + request.getParameter("vnp_Amount") +
-                         "&vnp_ResponseCode=" + responseCode;
-        } else {
-            targetUrl += "?vnp_ResponseCode=" + responseCode;
-        }
-
+        // Trả HTML trực tiếp để tránh AuthFilter
+        String targetUrl = success ? "/index.html?paymentSuccess=true" : "/index.html?paymentFailed=true";
         String color = success ? "#10b981" : "#f43f5e";
         String icon  = success ? "&#10003;" : "&#10007;";
-        String msg   = success ? "Xác thực Thành Công!" : "Thanh toán Thất Bại";
-        String sub   = "Đang chuyển hướng về Smart Tour...";
+        String msg   = success ? "Thanh toán Thành Công!" : "Thanh toán Thất Bại";
+        String sub   = success ? "Đơn hàng đã được xác nhận. Đang quay lại..." : "Giao dịch bị hủy. Đang quay lại...";
 
-        String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Smart Tour Payment</title></head>" +
+        String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Kết quả Thanh toán</title></head>" +
             "<body style='font-family:Arial;text-align:center;padding:80px;background:#f8fafc'>" +
             "<div style='background:white;border-radius:20px;padding:3rem;max-width:400px;margin:auto;box-shadow:0 10px 30px rgba(0,0,0,0.1)'>" +
             "<div style='font-size:4rem;color:" + color + ";margin-bottom:1rem'>" + icon + "</div>" +
             "<h2 style='color:" + color + ";margin-bottom:0.5rem'>" + msg + "</h2>" +
             "<p style='color:#64748b'>" + sub + "</p>" +
+            "<div style='margin-top:1.5rem;font-size:0.85rem;color:#94a3b8'>Tự động chuyển trang sau 1.5 giây...</div>" +
             "</div>" +
-            "<script>setTimeout(function(){window.location.href='" + targetUrl + "';},1000);</script>" +
+            "<script>setTimeout(function(){window.location.href='" + targetUrl + "';},1500);</script>" +
             "</body></html>";
 
         response.setContentType("text/html;charset=UTF-8");

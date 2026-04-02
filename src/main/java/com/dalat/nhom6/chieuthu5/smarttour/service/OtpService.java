@@ -27,8 +27,7 @@ public class OtpService {
     public boolean verify(String email, String inputOtp) {
         String key = email.toLowerCase();
         OtpEntry entry = otpStore.get(key);
-        if (entry == null)
-            return false;
+        if (entry == null) return false;
         if (LocalDateTime.now().isAfter(entry.expiry())) {
             otpStore.remove(key);
             return false;
@@ -40,6 +39,5 @@ public class OtpService {
         return false;
     }
 
-    private record OtpEntry(String otp, LocalDateTime expiry) {
-    }
+    private record OtpEntry(String otp, LocalDateTime expiry) {}
 }
