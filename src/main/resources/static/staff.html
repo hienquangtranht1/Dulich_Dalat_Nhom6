@@ -51,6 +51,7 @@
                 <a href="#" class="nav-link" data-target="locations">
                     <i class="fas fa-map-pin"></i> Hỗ trợ Địa điểm (AI)
                 </a>
+
                 <a href="#" class="nav-link" data-target="notifications" id="btnNotifications"
                     style="color:#fcd34d; position:relative;">
                     <i class="fas fa-bell"></i> Chuông Báo <span id="unreadCount"
@@ -62,7 +63,7 @@
                 <a href="profile.html" class="nav-link" style="color:#818cf8; margin-bottom:0.5rem">
                     <i class="fas fa-user-circle"></i> Hồ sơ doanh nghiệp
                 </a>
-                <a href="index.html" class="nav-link" style="color:#f43f5e">
+                <a href="http://localhost:5173/auth" class="nav-link" style="color:#f43f5e">
                     <i class="fas fa-sign-out-alt"></i> Đăng xuất
                 </a>
             </div>
@@ -76,6 +77,7 @@
 
             <!-- TAB 1: QUẢN LÝ DỊCH VỤ -->
             <div id="manage" class="tab-content animate-fade-in" style="display:block">
+
 
                 <!-- Form đăng dịch vụ mới -->
                 <div class="glass-panel" style="padding:2rem;margin-bottom:1.5rem">
@@ -182,6 +184,19 @@
                     </form>
                 </div>
 
+                <!-- Tìm kiếm dịch vụ -->
+                <div style="display:flex;gap:0.75rem;margin-bottom:1rem;align-items:center">
+                    <input type="text" id="svcSearchInput" class="input-glass" placeholder="🔍 Tìm theo tên dịch vụ, loại hình..." style="flex:1;max-width:400px" oninput="filterServicesList()">
+                    <select id="svcSearchType" class="input-glass" style="width:160px;background:var(--bg-dark)" onchange="filterServicesList()">
+                        <option value="">Tất cả loại</option>
+                        <option value="TOUR">Tour</option>
+                        <option value="HOTEL">Khách sạn</option>
+                        <option value="RESTAURANT">Nhà hàng</option>
+                        <option value="CAFE">Tiệm Cà Phê</option>
+                        <option value="ENTERTAINMENT">Khu Vui Chơi / Giải trí</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" onclick="fetchServices()"><i class="fas fa-sync-alt"></i> Làm mới</button>
+                </div>
                 <!-- Bảng danh sách dịch vụ của đại lý -->
                 <div class="glass-panel" style="padding:1.75rem">
                     <div style="display:flex;justify-content:space-between;margin-bottom:1rem;align-items:center">
@@ -224,11 +239,12 @@
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Mã Đơn</th>
-                                    <th>Khách hàng</th>
+                                    <th style="width:90px">Mã Đơn</th>
+                                    <th style="width:110px">Khách hàng</th>
                                     <th>Dịch vụ</th>
-                                    <th>Tổng Tiền</th>
-                                    <th>Thao tác</th>
+                                    <th style="width:120px">Tổng Tiền</th>
+                                    <th style="width:130px;text-align:center">Trạng Thái</th>
+                                    <th style="width:200px;text-align:right">Hành Động</th>
                                 </tr>
                             </thead>
                             <tbody id="ordersList">
@@ -250,6 +266,13 @@
                             Thống</h3>
                         <button class="btn btn-secondary btn-sm" onclick="fetchRevenue()"><i
                                 class="fas fa-sync-alt"></i> Làm mới</button>
+                    </div>
+                    <!-- Biểu đồ Doanh thu Đại lý -->
+                    <div style="background: #fff; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem;">
+                        <h3 style="color: #1e293b; margin-bottom: 1rem;"><i class="fas fa-chart-bar"></i> Biểu Đồ Doanh Thu Đại Lý (Năm Nay)</h3>
+                        <div style="position: relative; height: 320px; width: 100%;">
+                            <canvas id="staffRevenueChart"></canvas>
+                        </div>
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-bottom:1.5rem">
                         <div class="glass-panel" style="padding:1.2rem;text-align:center">
@@ -316,7 +339,11 @@
                             <input type="text" id="locCoords" class="input-glass" placeholder="11.940419, 108.458313"
                                 readonly>
                         </div>
-                        <div>
+                        <div class="flex-col gap-2">
+                            <label class="text-sm">Ảnh Minh Họa</label>
+                            <input type="file" id="locImage" class="input-glass" accept="image/*">
+                        </div>
+                        <div style="grid-column: span 3;">
                             <button type="submit" class="btn btn-primary" style="width:100%">
                                 <i class="fas fa-save"></i> Lưu Địa Điểm
                             </button>
@@ -327,6 +354,7 @@
                     <div id="osm-map" style="width:100%;height:500px;border-radius:12px;overflow:hidden"></div>
                 </div>
             </div>
+
 
             <!-- TAB: Màn hình Thông báo -->
             <div id="notifications" class="tab-content animate-fade-in" style="display:none">
@@ -353,6 +381,7 @@
         style="position:fixed;bottom:1.5rem;right:1.5rem;padding:.9rem 1.5rem;border-radius:10px;color:#fff;font-size:.875rem;font-weight:600;transform:translateY(100px);opacity:0;transition:all .35s cubic-bezier(.16,1,.3,1);z-index:9999;box-shadow:0 10px 30px rgba(0,0,0,.4);display:flex;align-items:center;gap:.5rem;min-width:280px;pointer-events:none">
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/main.js"></script>
     <script src="js/staff.js"></script>
 </body>

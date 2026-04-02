@@ -1,33 +1,36 @@
-HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# --- Frontend (Node/React) ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.eslintcache
+.stylelintcache
+package-lock.json (optional, but usually kept)
 
-### STS ###
-.apt_generated
+# --- Backend (Java/Spring Boot) ---
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# --- IDE & OS ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+.settings/
+.project
 .classpath
 .factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
-.vscode/
+# --- Application Specific ---
+uploads/
+/bin/
+/out/
+.gemini/
+/các thay đổi/ (Nếu bạn không muốn đẩy thư mục đóng gói này lên Git)

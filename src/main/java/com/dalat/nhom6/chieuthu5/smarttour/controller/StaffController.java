@@ -67,10 +67,60 @@ public class StaffController {
         Agency agency = getAgencyFromSession(request);
         if (agency == null) return ResponseEntity.status(403).build();
         return ResponseEntity.ok(Map.of(
+            "id", agency.getId(),
             "agencyName", agency.getAgencyName(),
-            "license", agency.getBusinessLicense(),
+            "businessLicense", agency.getBusinessLicense() != null ? agency.getBusinessLicense() : "",
+            "taxCode", agency.getTaxCode() != null ? agency.getTaxCode() : "",
+            "address", agency.getAddress() != null ? agency.getAddress() : "",
+            "contactPhone", agency.getContactPhone() != null ? agency.getContactPhone() : "",
+            "website", agency.getWebsite() != null ? agency.getWebsite() : "",
+            "logoUrl", agency.getLogoUrl() != null ? agency.getLogoUrl() : "",
+            "description", agency.getDescription() != null ? agency.getDescription() : "",
             "isApproved", agency.getIsApproved()
         ));
+    }
+
+    @PostMapping("/me/update")
+    public ResponseEntity<?> updateAgencyInfo(
+            @RequestParam("agencyName") String agencyName,
+            @RequestParam("taxCode") String taxCode,
+            @RequestParam("contactPhone") String contactPhone,
+            @RequestParam("address") String address,
+            @RequestParam("website") String website,
+            @RequestParam("description") String description,
+            @RequestParam(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
+            HttpServletRequest request) {
+        
+        Agency agency = getAgencyFromSession(request);
+        if (agency == null) return ResponseEntity.status(403).build();
+
+        try {
+            agency.setAgencyName(agencyName);
+            agency.setTaxCode(taxCode);
+            agency.setContactPhone(contactPhone);
+            agency.setAddress(address);
+            agency.setWebsite(website);
+            agency.setDescription(description);
+
+            if (image != null && !image.isEmpty()) {
+                String uploadDir = "uploads/";
+                java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDir);
+                if (!java.nio.file.Files.exists(uploadPath)) {
+                    java.nio.file.Files.createDirectories(uploadPath);
+                }
+                String originalName = image.getOriginalFilename();
+                String ext = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".")) : ".jpg";
+                String newFileName = "logo_" + System.currentTimeMillis() + ext;
+                java.nio.file.Path filePath = uploadPath.resolve(newFileName);
+                java.nio.file.Files.copy(image.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                agency.setLogoUrl("/uploads/" + newFileName);
+            }
+
+            agencyRepository.save(agency);
+            return ResponseEntity.ok(Map.of("message", "Cập nhật thông tin đại lý thành công!"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(e.getMessage());
+        }
     }
 
     @GetMapping("/services")
@@ -445,6 +495,7 @@ public class StaffController {
             @RequestParam(value = "closingTime", required = false) String closingTime,
             @RequestParam(value = "mapPoints", required = false) String mapPoints,
             @RequestParam(value = "availableRooms", required = false) Integer availableRooms,
+            @RequestParam(value = "availableTrips", required = false) Integer availableTrips,
             @RequestParam(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
             HttpServletRequest request) {
             
@@ -463,6 +514,7 @@ public class StaffController {
             svc.setSalePrice(price);
             svc.setDescription(description);
             svc.setMaxPeople(maxPeople);
+            svc.setAvailableTrips(availableTrips);
             svc.setDurationDays(durationDays);
             svc.setTransportation(transportation);
             svc.setOpeningTime(openingTime);
@@ -540,14 +592,45 @@ public class StaffController {
     @PostMapping("/locations")
     public ResponseEntity<?> createLocation(
             @RequestParam("name") String name,
-            @RequestParam("coordinates") String coordinates) {
+            @RequestParam("coordinates") String coordinates,
+            @RequestParam(value = "image", required = false) org.springframework.web.multipart.MultipartFile image) {
             
+        String imageUrl = null;
+        if (image != null && !image.isEmpty()) {
+            try {
+                String uploadDir = "uploads/";
+                java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDir);
+                if (!java.nio.file.Files.exists(uploadPath)) {
+                    java.nio.file.Files.createDirectories(uploadPath);
+                }
+                String originalName = image.getOriginalFilename();
+                String ext = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".")) : ".jpg";
+                String newFileName = "loc_" + System.currentTimeMillis() + ext;
+                java.nio.file.Path filePath = uploadPath.resolve(newFileName);
+                java.nio.file.Files.copy(image.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                imageUrl = "/uploads/" + newFileName;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        double lat = 11.940;
+        double lng = 108.450;
+        try {
+            if (coordinates != null && coordinates.contains(",")) {
+                String[] parts = coordinates.split(",");
+                lat = Double.parseDouble(parts[0].trim());
+                lng = Double.parseDouble(parts[1].trim());
+            }
+        } catch (Exception e) {}
+
         Location loc = Location.builder()
                 .name(name)
                 .category("KHAC")
-                .latitude(11.940)
-                .longitude(108.450)
+                .latitude(lat)
+                .longitude(lng)
                 .description("Cập nhật bởi Đại lý")
+                .imageUrl(imageUrl)
                 .build();
                 
         locationRepository.save(loc);
@@ -590,5 +673,43 @@ public class StaffController {
             }
         }
         return ResponseEntity.ok(Map.of("monthlyRevenue", monthlyRevenue));
+    }
+
+    @GetMapping("/search-agencies")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> searchAgencies(
+            @RequestParam(value = "keyword", required = false, defaultValue = "") String keyword,
+            HttpServletRequest request) {
+        
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute("USER_ROLE") == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        List<Agency> agencies = agencyRepository.searchAgenciesByKeyword(keyword);
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (Agency a : agencies) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", a.getId());
+            map.put("agencyName", a.getAgencyName());
+            map.put("taxCode", a.getTaxCode());
+            map.put("contactPhone", a.getContactPhone());
+            map.put("address", a.getAddress());
+
+            List<Service> services = serviceRepository.findByAgencyId(a.getId());
+            List<Map<String, Object>> serviceList = new ArrayList<>();
+            for (Service s : services) {
+                Map<String, Object> sMap = new HashMap<>();
+                sMap.put("id", s.getId());
+                sMap.put("serviceName", s.getServiceName());
+                sMap.put("serviceType", s.getServiceType());
+                serviceList.add(sMap);
+            }
+            map.put("services", serviceList);
+            result.add(map);
+        }
+
+        return ResponseEntity.ok(result);
     }
 }

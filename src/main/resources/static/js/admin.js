@@ -20,7 +20,7 @@ function logout(e) {
     e.preventDefault();
     document.cookie = 'JSESSIONID=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     showToast('Đã đăng xuất!');
-    setTimeout(() => location.href = 'index.html', 1000);
+    setTimeout(() => location.href = 'http://localhost:5173/auth', 1000);
 }
 
 // ── 3. LÀM MỚI TẤT CẢ ───────────────────────────────────
@@ -86,21 +86,25 @@ async function fetchServices(isPreview = false) {
         data.forEach(s => {
             const price = fmtVND(s.price);
             const badge = s.isApproved
-                ? '<span class="badge badge-success">✔ Đã Duyệt</span>'
+                ? (s.isActive ? '<span class="badge badge-success">✔ Đã Duyệt</span>' : '<span class="badge" style="background:#fef2f2;color:#ef4444">⏸ Đã Ẩn</span>')
                 : '<span class="badge badge-warn">⏳ Chờ Duyệt</span>';
+            const toggleBtn = s.isApproved 
+                ? (s.isActive ? `<button class="btn btn-sm" style="background:#fef2f2;color:#ef4444;border:1px solid #fca5a5" onclick="toggleService(${s.id})" title="Ẩn hiển thị"><i class="fas fa-eye-slash"></i></button>` : `<button class="btn btn-success btn-sm" onclick="toggleService(${s.id})" title="Bật hiển thị"><i class="fas fa-eye"></i></button>`)
+                : '';
             const actions = s.isApproved
-                ? `<div class="action-group">
-                    <button class="btn btn-sm view-btn" onclick="showServiceDetail(${s.id})"><i class="fas fa-eye"></i> Xem</button>
-                    <button class="btn btn-danger btn-sm" onclick="rejectService(${s.id})"><i class="fas fa-trash"></i> Xoá</button>
+                ? `<div class="action-group" style="gap:4px">
+                    <button class="btn btn-sm view-btn" onclick="showServiceDetail(${s.id})" title="Xem"><i class="fas fa-search"></i></button>
+                    ${toggleBtn}
+                    <button class="btn btn-danger btn-sm" onclick="rejectService(${s.id})" title="Xóa"><i class="fas fa-trash"></i></button>
                    </div>`
-                : `<div class="action-group">
-                    <button class="btn btn-sm view-btn" onclick="showServiceDetail(${s.id})"><i class="fas fa-eye"></i> Xem</button>
-                    <button class="btn btn-success btn-sm" onclick="approveService(${s.id})"><i class="fas fa-check"></i> Duyệt</button>
-                    <button class="btn btn-danger btn-sm" onclick="rejectService(${s.id})"><i class="fas fa-times"></i> Từ Chối</button>
+                : `<div class="action-group" style="gap:4px">
+                    <button class="btn btn-sm view-btn" onclick="showServiceDetail(${s.id})" title="Xem"><i class="fas fa-search"></i></button>
+                    <button class="btn btn-success btn-sm" onclick="approveService(${s.id})" title="Duyệt"><i class="fas fa-check"></i></button>
+                    <button class="btn btn-danger btn-sm" onclick="rejectService(${s.id})" title="Từ chối"><i class="fas fa-times"></i></button>
                    </div>`;
             tbody.innerHTML += `
             <tr>
-                <td><img src="${s.imageUrl}" class="thumb-img" onerror="this.src='https://via.placeholder.com/60'" alt="${s.name}"></td>
+                <td><img src="${s.imageUrl}" class="thumb-img" onerror="this.src='https://picsum.photos/seed/${s.id}/60/60'" alt="${s.name}"></td>
                 <td><b>${s.name}</b></td>
                 <td><span class="badge badge-info">${s.type}</span></td>
                 <td><i class="fas fa-store text-muted"></i> ${s.agencyName}</td>
@@ -125,6 +129,12 @@ async function rejectService(id) {
     else { const e = await res.json().catch(() => ({})); showToast('Lỗi: ' + (e.error || 'Không xoá được'), true); }
 }
 
+async function toggleService(id) {
+    const res = await fetch(`/api/admin/services/${id}/toggle`, { method: 'POST' });
+    if (res.ok) { fetchServices(); }
+    else { showToast('Lỗi bật/tắt Service!', true); }
+}
+
 let adminDetailMap;
 function showServiceDetail(id) {
     const s = (window._servicesData || []).find(x => x.id === id);
@@ -146,7 +156,7 @@ function showServiceDetail(id) {
 
     document.getElementById('modal-content').innerHTML = `
         <h3 style="font-size:1.2rem;margin-bottom:1rem;color:#818cf8"><i class="fas fa-box"></i> ${s.name}</h3>
-        <img src="${s.imageUrl}" style="width:100%;height:200px;object-fit:cover;border-radius:12px;margin-bottom:1rem;" onerror="this.src='https://via.placeholder.com/400x200'"/>
+        <img src="${s.imageUrl}" style="width:100%;height:200px;object-fit:cover;border-radius:12px;margin-bottom:1rem;" onerror="this.src='https://picsum.photos/seed/${s.id}/400/200'"/>
         <div style="display:grid;gap:0.6rem;font-size:.875rem;">
             <div><span style="color:var(--text-muted)">Loại dịch vụ:</span> <b>${s.type}</b></div>
             <div><span style="color:var(--text-muted)">Đại lý:</span> <b>${s.agencyName || (s.agency?s.agency.agencyName:'')}</b></div>
@@ -349,11 +359,18 @@ async function fetchUsers() {
         data.forEach(u => {
             const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '—';
             const verifyHtml = u.isEmailVerified ? '<i class="fas fa-check-circle" style="color:#34d399" title="Đã xác minh email"></i>' : '';
+            const statusBadge = u.isActive 
+                ? '<span class="badge badge-success">Bình thường</span>' 
+                : '<span class="badge" style="background:#fee2e2;color:#ef4444">Đã Khóa</span>';
+            const toggleBtn = u.isActive
+                ? `<button class="btn btn-sm" style="background:#fef2f2;color:#ef4444;border:1px solid #fca5a5" onclick="toggleUser(${u.id})" title="Khóa tài khoản"><i class="fas fa-lock"></i></button>`
+                : `<button class="btn btn-success btn-sm" onclick="toggleUser(${u.id})" title="Mở khóa tài khoản"><i class="fas fa-unlock"></i></button>`;
+
             tbody.innerHTML += `
             <tr>
                 <td>
                     <div style="display:flex;align-items:center;gap:.75rem">
-                        <img src="${u.avatarUrl || 'https://via.placeholder.com/40'}" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.src='https://ui-avatars.com/api/?name=${u.username}'">
+                        <img src="${u.avatarUrl || 'https://ui-avatars.com/api/?name=' + u.username}" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.src='https://ui-avatars.com/api/?name=${u.username}'">
                         <div>
                             <b>${u.fullName || u.username}</b><br>
                             <span style="font-size:0.75rem;color:var(--text-muted)"><i class="fas fa-phone"></i> ${u.phone || '—'}</span>
@@ -362,8 +379,12 @@ async function fetchUsers() {
                 </td>
                 <td>${u.email} ${verifyHtml}</td>
                 <td>${dateStr}</td>
+                <td>${statusBadge}</td>
                 <td style="text-align:right">
-                    <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i> Xoá</button>
+                    <div style="display:flex;gap:4px;justify-content:flex-end">
+                        ${toggleBtn}
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})" title="Xoá vĩnh viễn"><i class="fas fa-trash"></i></button>
+                    </div>
                 </td>
             </tr>`;
         });
@@ -375,6 +396,12 @@ async function deleteUser(id) {
     const res = await fetch(`/api/admin/users/${id}/delete`, { method: 'POST' });
     if (res.ok) { showToast('Đã xoá Khách Hàng!'); fetchUsers(); }
     else { const e = await res.json().catch(() => ({})); showToast('Lỗi: ' + (e.error || 'Thất bại'), true); }
+}
+
+async function toggleUser(id) {
+    const res = await fetch(`/api/admin/users/${id}/toggle-active`, { method: 'POST' });
+    if (res.ok) { fetchUsers(); }
+    else { showToast('Lỗi khóa/mở khóa Khách hàng!', true); }
 }
 
 // ── 8. MODAL ─────────────────────────────────────────────
@@ -472,9 +499,25 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchConfigs();
     if(document.getElementById('usersList')) fetchUsers();
     loadUnreadNotifications();
-    loadAdminChart(); // Tự động load biểu đồ khi mở trang
+
+    // Tự động load ngay khi mới mở trang Admin
+    setTimeout(() => loadAdminChart(), 300);
+    
+    initAdminTabs();
     setInterval(loadUnreadNotifications, 30000); // tự refresh badge mỗi 30 giây
 });
+
+function initAdminTabs() {
+    document.querySelectorAll('.nav-link[data-target]').forEach(link => {
+        link.addEventListener('click', () => {
+            const t = link.getAttribute('data-target');
+            if (t === 'dashboard') {
+                setTimeout(() => loadAdminChart(), 150); // Mở lại tab là vẽ lại cho chắc
+            }
+            // ... (Giữ nguyên các tab khác nếu có)
+        });
+    });
+}
 
 let adminChartInstance = null;
 
@@ -487,27 +530,196 @@ async function loadAdminChart() {
         const ctx = document.getElementById('adminRevenueChart');
         if (!ctx) return;
 
-        // Xóa biểu đồ cũ nếu đã vẽ để tránh bị đè lỗi
         if (adminChartInstance) adminChartInstance.destroy();
 
         adminChartInstance = new Chart(ctx, {
-            type: 'line', // Biểu đồ đường
+            type: 'line',
             data: {
                 labels: ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'],
                 datasets: [{
-                    label: 'Tổng Doanh Thu (VNĐ)',
+                    label: 'Tổng Doanh Thu Hệ Thống (VNĐ)',
                     data: data.monthlyRevenue,
                     borderColor: '#4f46e5',
                     backgroundColor: 'rgba(79, 70, 229, 0.1)',
                     borderWidth: 3,
-                    tension: 0.3, // Làm cong đường nối
+                    tension: 0.3,
                     fill: true
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false, // QUAN TRỌNG: Chống lỗi 0px
                 scales: { y: { beginAtZero: true } }
             }
         });
     } catch (e) { console.error("Lỗi vẽ biểu đồ Admin:", e); }
+}
+
+// ── 11. ĐÁNH GIÁ & BÁO CÁO ─────────────────────────────
+async function fetchPendingReviews() {
+    try {
+        const res = await fetch('/api/reviews/pending');
+        if (!res.ok) throw new Error('Failed to fetch reviews');
+        const data = await res.json();
+        
+        const tbody = document.getElementById('reviewsList');
+        if (!tbody) return;
+        
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Không có đánh giá/báo cáo nào cần duyệt.</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = data.map(r => {
+            const dateStr = new Date(r.createdAt).toLocaleString('vi-VN');
+            const typeBadge = r.type === 'REPORT' 
+                ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;">Báo Cáo</span>'
+                : '<span class="badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Đánh Giá</span>';
+            const ratingStr = r.type === 'REVIEW' && r.rating ? '⭐'.repeat(r.rating) : '—';
+            
+            return `
+            <tr>
+                <td><b>${r.userName}</b></td>
+                <td><div style="font-weight:600">${r.serviceName}</div><div style="font-size:0.75rem;color:#64748b">${r.agencyName}</div></td>
+                <td>${typeBadge}</td>
+                <td style="color:#fbbf24">${ratingStr}</td>
+                <td><div style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.content}">${r.content}</div></td>
+                <td style="font-size:0.8rem">${dateStr}</td>
+                <td style="text-align:right">
+                    <div class="action-group">
+                        <button class="btn btn-success btn-sm" onclick="moderateReview(${r.id}, 'APPROVED')" title="Duyệt"><i class="fas fa-check"></i></button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteReview(${r.id})" title="Xóa bỏ"><i class="fas fa-trash"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        document.getElementById('reviewsList').innerHTML = '<tr class="empty-row"><td colspan="7" style="color:red">Lỗi tải dữ liệu.</td></tr>';
+    }
+}
+
+async function moderateReview(id, status) {
+    try {
+        const res = await fetch(`/api/reviews/${id}/status?status=${status}`, { method: 'PUT' });
+        if (res.ok) {
+            showToast('Đã phê duyệt!');
+            fetchPendingReviews();
+        } else {
+            showToast('Lỗi cập nhật trạng thái', true);
+        }
+    } catch (e) {
+        showToast('Lỗi mạng', true);
+    }
+}
+
+async function deleteReview(id) {
+    if (!confirm('Bạn có chắc muốn xóa vĩnh viễn nội dung này?')) return;
+    try {
+        const res = await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            showToast('Đã xóa thành công!');
+            fetchPendingReviews();
+        } else {
+            showToast('Lỗi khi xóa', true);
+        }
+    } catch (e) {
+        showToast('Lỗi mạng', true);
+    }
+}
+
+// ── 12. TRA CỨU ĐỐI TÁC ────────────────────────────────
+function adminSearchPartners() {
+    const keyword = document.getElementById('adminSearchKeyword').value.trim();
+    const resultContainer = document.getElementById('adminSearchResults');
+    const tbody = document.getElementById('adminSearchList');
+    
+    if (!keyword) {
+        showToast('Vui lòng nhập từ khóa tìm kiếm', true);
+        return;
+    }
+    
+    resultContainer.style.display = 'block';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;"><i class="fas fa-spinner fa-spin"></i> Đang tìm kiếm...</td></tr>';
+    
+    fetch(`/api/staff/search-agencies?keyword=${encodeURIComponent(keyword)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:#64748b;">Không tìm thấy đối tác nào phù hợp.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.map(a => {
+                let servicesHtml = '';
+                if (a.services && a.services.length > 0) {
+                    servicesHtml = '<ul style="margin:0;padding-left:1.5rem;font-size:0.85rem;">' + 
+                        a.services.map(s => `<li>${s.name} <span class="badge" style="background:#f1f5f9;color:#64748b;font-size:0.6rem;padding:2px 4px;">${s.type}</span></li>`).join('') + 
+                        '</ul>';
+                } else {
+                    servicesHtml = '<span style="color:#94a3b8;font-size:0.85rem;">Chưa có dịch vụ</span>';
+                }
+                
+                return `
+                <tr>
+                    <td><b>${a.agencyName}</b></td>
+                    <td>${a.taxCode || '—'}</td>
+                    <td><div style="font-size:0.85rem;"><i class="fas fa-phone" style="color:#94a3b8;width:16px;"></i> ${a.phone || '—'}<br><i class="fas fa-envelope" style="color:#94a3b8;width:16px;"></i> ${a.email || '—'}</div></td>
+                    <td>${servicesHtml}</td>
+                </tr>`;
+            }).join('');
+        })
+        .catch(err => {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:#ef4444;">Lỗi khi tra cứu.</td></tr>';
+        });
+}
+
+// Đăng ký mở tab reviews
+document.querySelectorAll('.nav-link[data-target="reviews"]').forEach(link => {
+    link.addEventListener('click', () => fetchPendingReviews());
+});
+
+// ── UTILS: SẮP XẾP BẢNG ─────────────────────────
+function sortTable(tableId, n) {
+    let table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+    table = document.getElementById(tableId);
+    if (!table) return;
+    switching = true;
+    dir = "asc"; 
+    while (switching) {
+        switching = false;
+        rows = table.getElementsByTagName("TR");
+        for (i = 1; i < (rows.length - 1); i++) {
+            shouldSwitch = false;
+            x = rows[i].getElementsByTagName("TD")[n];
+            y = rows[i + 1].getElementsByTagName("TD")[n];
+            if (!x || !y) continue;
+            
+            let valX = x.innerHTML.toLowerCase().replace(/<[^>]*>?/gm, '').trim();
+            let valY = y.innerHTML.toLowerCase().replace(/<[^>]*>?/gm, '').trim();
+            
+            const numX = parseFloat(valX.replace(/[^\d.-]/g, ''));
+            const numY = parseFloat(valY.replace(/[^\d.-]/g, ''));
+            if (!isNaN(numX) && !isNaN(numY) && valX.includes('₫')) {
+                valX = numX; valY = numY;
+            } else if (!isNaN(numX) && !isNaN(numY) && (valX.match(/^\d+$/) && valY.match(/^\d+$/))) {
+                valX = numX; valY = numY;
+            }
+
+            if (dir == "asc") {
+                if (valX > valY) { shouldSwitch = true; break; }
+            } else if (dir == "desc") {
+                if (valX < valY) { shouldSwitch = true; break; }
+            }
+        }
+        if (shouldSwitch) {
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+            switchcount++;
+        } else {
+            if (switchcount == 0 && dir == "asc") {
+                dir = "desc";
+                switching = true;
+            }
+        }
+    }
 }
