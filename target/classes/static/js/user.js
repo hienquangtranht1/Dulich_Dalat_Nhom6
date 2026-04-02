@@ -64,10 +64,14 @@ async function handleAIGenerate(e) {
     btn.disabled = true;
 
     const body = new URLSearchParams({
-        budget:      document.getElementById('aiBudget').value,
-        days:        document.getElementById('aiDays').value,
-        transport:   document.getElementById('aiTransport').value,
-        preferences: document.getElementById('aiPrefs').value
+        budget:        document.getElementById('aiBudget').value,
+        arrival:       document.getElementById('aiArrival').value,
+        departure:     document.getElementById('aiDeparture').value,
+        groupType:     document.getElementById('aiGroup').value,
+        startLocation: document.getElementById('aiStartLoc').value,
+        pace:          document.getElementById('aiPace').value,
+        transport:     document.getElementById('aiTransport').value,
+        preferences:   document.getElementById('aiPrefs').value
     });
 
     try {
@@ -76,13 +80,15 @@ async function handleAIGenerate(e) {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body
         });
+        const data = await res.json();
+        
         if (res.ok) {
-            const data = await res.json();
             showToast(data.message);
             renderItinerary(data.itinerary);
             document.getElementById('ai-result').style.display = 'block';
+            window.scrollTo({ top: document.getElementById('ai-result').offsetTop - 30, behavior: 'smooth' });
         } else {
-            showToast('Lỗi Server AI. Vui lòng thử lại!', true);
+            showToast(data.error || 'Lỗi Server AI. Vui lòng thử lại!', true);
         }
     } catch {
         showToast('Không kết nối được máy chủ AI!', true);
@@ -96,13 +102,22 @@ function renderItinerary(days) {
     const c = document.getElementById('ai-itinerary-content');
     c.innerHTML = '';
     days.forEach(d => {
+        const parseCard = (timeTxt, objClass, data) => {
+            if (!data || !data.location || data.location.trim() === '') return '';
+            return `<li>
+                <span class="time-badge ${objClass}">${timeTxt}</span> 
+                <b>${data.location}</b> <br>
+                <small class="text-muted" style="margin-left:55px;display:block">📝 ${data.note || ''} | 💸 Chi phí: ${data.cost || '0'}</small>
+            </li>`;
+        };
+        
         c.innerHTML += `
         <div class="ai-day-card">
-            <h4 class="ai-day-title">${d.title}</h4>
+            <h4 class="ai-day-title">${d.day || d.title || 'Lịch trình ngày'}</h4>
             <ul class="ai-day-list">
-                <li><span class="time-badge morning">🌅 Sáng</span> ${d.morning}</li>
-                <li><span class="time-badge noon">☀️ Trưa</span> ${d.afternoon}</li>
-                <li><span class="time-badge evening">🌙 Tối</span> ${d.evening}</li>
+                ${parseCard('🌅 Sáng', 'morning', d.morning)}
+                ${parseCard('☀️ Trưa', 'noon', d.noon)}
+                ${parseCard('🌙 Tối', 'evening', d.evening)}
             </ul>
         </div>`;
     });

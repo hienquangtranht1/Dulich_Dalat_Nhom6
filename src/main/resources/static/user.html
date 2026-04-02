@@ -71,6 +71,9 @@
         </nav>
 
         <div style="margin-top:auto">
+            <a href="profile.html" class="nav-link" style="color:#818cf8; margin-bottom:0.5rem">
+                <i class="fas fa-user-circle"></i> Hồ sơ cá nhân
+            </a>
             <a href="index.html" class="nav-link" style="color:#f43f5e">
                 <i class="fas fa-sign-out-alt"></i> Đăng xuất
             </a>
@@ -92,12 +95,37 @@
                 </p>
                 <form id="aiForm" onsubmit="handleAIGenerate(event)" style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem">
                     <div class="flex-col gap-2">
+                        <label class="text-sm">Giờ đến Đà Lạt (Arrival)</label>
+                        <input type="datetime-local" id="aiArrival" class="input-glass" required>
+                    </div>
+                    <div class="flex-col gap-2">
+                        <label class="text-sm">Giờ rời đi (Departure)</label>
+                        <input type="datetime-local" id="aiDeparture" class="input-glass" required>
+                    </div>
+                    <div class="flex-col gap-2">
                         <label class="text-sm">Ngân sách dự kiến (VNĐ)</label>
                         <input type="number" id="aiBudget" class="input-glass" placeholder="5,000,000" min="0" required>
                     </div>
                     <div class="flex-col gap-2">
-                        <label class="text-sm">Số ngày lưu trú</label>
-                        <input type="number" id="aiDays" class="input-glass" placeholder="3" min="1" max="14" required>
+                        <label class="text-sm">Nhóm đối tượng</label>
+                        <select id="aiGroup" class="input-glass" style="background:var(--bg-dark)">
+                            <option value="Đi Một Mình">Một mình (Linh hoạt)</option>
+                            <option value="Cặp Đôi">Cặp Đôi (Lang mạn)</option>
+                            <option value="Gia Đình Trẻ Em">Gia đình có Trẻ em (An toàn)</option>
+                            <option value="Gia Đình Người Lớn Tuổi">Gia đình có Người già (Thư giãn)</option>
+                        </select>
+                    </div>
+                    <div class="flex-col gap-2">
+                        <label class="text-sm">Điểm Hotel / Nơi Xuất Phát</label>
+                        <input type="text" id="aiStartLoc" class="input-glass" placeholder="VD: Khách sạn Mường Thanh, hoặc Bến xe" required>
+                    </div>
+                    <div class="flex-col gap-2">
+                        <label class="text-sm">Nhịp độ tham quan</label>
+                        <select id="aiPace" class="input-glass" style="background:var(--bg-dark)">
+                            <option value="Vừa phải">Vừa phải (2-3 điểm/buổi)</option>
+                            <option value="Thư thả">Thư thả (1-2 điểm/buổi, cafe ngắm cảnh)</option>
+                            <option value="Năng động">Năng động (Check-in liên tục 4 điểm/buổi)</option>
+                        </select>
                     </div>
                     <div class="flex-col gap-2">
                         <label class="text-sm">Phương tiện di chuyển</label>
@@ -108,7 +136,7 @@
                     </div>
                     <div class="flex-col gap-2">
                         <label class="text-sm">Thể loại yêu thích</label>
-                        <input type="text" id="aiPrefs" class="input-glass" placeholder="Tham quan, Cafe Mây, Ăn lẩu..." required>
+                        <input type="text" id="aiPrefs" class="input-glass" placeholder="Săn mây, Ăn lẩu bò, hái dâu..." required>
                     </div>
                     <div style="grid-column:span 2">
                         <button type="submit" id="btnAIGenerate" class="btn btn-primary" style="width:100%">
