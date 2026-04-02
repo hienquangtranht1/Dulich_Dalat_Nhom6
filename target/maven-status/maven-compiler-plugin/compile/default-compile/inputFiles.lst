@@ -1,4 +1,5 @@
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\config\WebConfig.java
+E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\config\WebSocketConfig.java
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\controller\AdminController.java
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\controller\AIGeneratorController.java
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\controller\AuthController.java
@@ -25,4 +26,6 @@ E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttou
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\repository\ServiceRepository.java
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\repository\SystemConfigRepository.java
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\repository\UserRepository.java
+E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\service\EmailService.java
+E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\service\OtpService.java
 E:\hoc\doancuoikyjava\smarttour\src\main\java\com\dalat\nhom6\chieuthu5\smarttour\SmarttourApplication.java
