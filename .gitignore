@@ -34,3 +34,8 @@ uploads/
 /out/
 .gemini/
 /các thay đổi/ (Nếu bạn không muốn đẩy thư mục đóng gói này lên Git)
+/target/
+.settings/
+.classpath
+.project
+
